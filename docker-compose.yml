@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  rag-chatbot:
+    build: .
+    container_name: rag-chatbot
+    ports:
+      - "8000:8000"
+    volumes:
+      # 코드 변경 시 자동 반영 (개발용)
+      - .:/app
+      # 벡터 DB 데이터 영구 저장
+      - vector_db_data:/app/vector_db
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  vector_db_data:
+    driver: local
+
