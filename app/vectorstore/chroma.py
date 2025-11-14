@@ -7,6 +7,9 @@ from typing import List, Dict, Any, Optional
 import os
 from app.config import settings
 
+# 텔레메트리 비활성화
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+
 
 class ChromaVectorStore:
     """ChromaDB를 사용한 벡터 스토어"""
@@ -25,12 +28,15 @@ class ChromaVectorStore:
         os.makedirs(self.db_path, exist_ok=True)
         
         # ChromaDB 클라이언트 초기화
+        # 텔레메트리 완전히 비활성화
+        chroma_settings = ChromaSettings(
+            anonymized_telemetry=False,
+            allow_reset=True
+        )
+        
         self.client = chromadb.PersistentClient(
             path=self.db_path,
-            settings=ChromaSettings(
-                anonymized_telemetry=False,
-                allow_reset=True
-            )
+            settings=chroma_settings
         )
         
         # 컬렉션 가져오기 또는 생성

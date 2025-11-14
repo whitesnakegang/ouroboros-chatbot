@@ -10,7 +10,9 @@ from app.models import (
     BulkDocumentResponse,
     SearchRequest,
     SearchResponse,
-    StatsResponse
+    StatsResponse,
+    ChunkListResponse,
+    ChunkResponse
 )
 from app.ingest.pipeline import IngestPipeline
 from app.ingest.loader import DocumentLoader
@@ -164,15 +166,15 @@ async def search_documents(request: SearchRequest):
         raise HTTPException(status_code=500, detail=f"Error searching documents: {str(e)}")
 
 
-@router.post("/upload-html", response_model=BulkDocumentResponse)
-async def upload_html_files(
-    files: List[UploadFile] = File(..., description="HTML 파일들"),
+@router.post("/upload-markdown", response_model=BulkDocumentResponse)
+async def upload_markdown_files(
+    files: List[UploadFile] = File(..., description="마크다운 파일들"),
     base_metadata: Optional[str] = Form(None, description="기본 메타데이터 (JSON 문자열)")
 ):
     """
-    HTML 파일들을 업로드하여 벡터 데이터베이스에 추가합니다.
+    마크다운 파일들을 업로드하여 벡터 데이터베이스에 추가합니다.
     
-    React 정적 웹 파일 형식의 HTML 파일들을 받아서 처리합니다.
+    마크다운 파일을 헤더 기반으로 청킹하여 처리합니다.
     """
     import json
     
@@ -192,15 +194,15 @@ async def upload_html_files(
     for file in files:
         try:
             # 파일 확장자 확인
-            if not file.filename.lower().endswith(('.html', '.htm')):
-                errors.append(f"Skipped {file.filename}: Not an HTML file")
+            if not file.filename.lower().endswith(('.md', '.markdown')):
+                errors.append(f"Skipped {file.filename}: Not a markdown file")
                 continue
             
             # 파일 읽기
             file_bytes = await file.read()
             
-            # HTML 파싱
-            document = DocumentLoader.load_html_from_bytes(
+            # 마크다운 파싱
+            document = DocumentLoader.load_markdown_from_bytes(
                 file_bytes=file_bytes,
                 filename=file.filename,
                 metadata={**base_meta, "upload_source": "api"}
@@ -222,7 +224,7 @@ async def upload_html_files(
             continue
     
     return BulkDocumentResponse(
-        message=f"Processed {processed_count} HTML file(s)",
+        message=f"Processed {processed_count} markdown file(s)",
         total_documents=processed_count,
         total_chunks=total_chunks,
         document_ids=document_ids,
@@ -231,15 +233,15 @@ async def upload_html_files(
 
 
 @router.post("/upload-directory", response_model=BulkDocumentResponse)
-async def upload_html_directory(
-    directory_path: str = Form(..., description="HTML 파일이 있는 디렉토리 경로"),
-    pattern: str = Form("*.html", description="파일 패턴 (예: *.html)"),
+async def upload_markdown_directory(
+    directory_path: str = Form(..., description="마크다운 파일이 있는 디렉토리 경로"),
+    pattern: str = Form("*.md", description="파일 패턴 (예: *.md)"),
     base_metadata: Optional[str] = Form(None, description="기본 메타데이터 (JSON 문자열)")
 ):
     """
-    디렉토리 경로를 제공하여 HTML 파일들을 일괄 처리합니다.
+    디렉토리 경로를 제공하여 마크다운 파일들을 일괄 처리합니다.
     
-    서버에서 접근 가능한 디렉토리 경로를 제공하면 해당 디렉토리의 모든 HTML 파일을 처리합니다.
+    서버에서 접근 가능한 디렉토리 경로를 제공하면 해당 디렉토리의 모든 마크다운 파일을 처리합니다.
     """
     import json
     
@@ -252,15 +254,15 @@ async def upload_html_directory(
             raise HTTPException(status_code=400, detail="Invalid JSON in base_metadata")
     
     try:
-        # 디렉토리에서 HTML 파일 로드
-        documents = DocumentLoader.load_html_directory(
+        # 디렉토리에서 마크다운 파일 로드
+        documents = DocumentLoader.load_markdown_directory(
             directory_path=directory_path,
             pattern=pattern,
             metadata={**base_meta, "upload_source": "directory"}
         )
         
         if not documents:
-            raise HTTPException(status_code=404, detail="No HTML files found in directory")
+            raise HTTPException(status_code=404, detail="No markdown files found in directory")
         
         # 모든 문서 처리
         processed_count = 0
@@ -285,7 +287,7 @@ async def upload_html_directory(
                 continue
         
         return BulkDocumentResponse(
-            message=f"Processed {processed_count} HTML file(s) from directory",
+            message=f"Processed {processed_count} markdown file(s) from directory",
             total_documents=processed_count,
             total_chunks=total_chunks,
             document_ids=document_ids,
@@ -296,4 +298,107 @@ async def upload_html_directory(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing directory: {str(e)}")
+
+
+@router.get("/chunks", response_model=ChunkListResponse)
+async def list_chunks(
+    document_id: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0
+):
+    """
+    저장된 모든 청크를 조회합니다.
+    
+    Args:
+        document_id: 특정 문서의 청크만 조회 (선택적)
+        limit: 반환할 최대 청크 수 (기본값: 100)
+        offset: 건너뛸 청크 수 (기본값: 0)
+    """
+    try:
+        all_docs = ingest_pipeline.get_all_documents()
+        
+        chunks = []
+        for doc in all_docs:
+            # document_id 필터링
+            if document_id:
+                doc_metadata = doc.get("metadata", {})
+                if doc_metadata.get("document_id") != document_id:
+                    continue
+            
+            chunks.append(ChunkResponse(
+                chunk_id=doc.get("id", ""),
+                text=doc.get("text", ""),
+                metadata=doc.get("metadata", {})
+            ))
+        
+        # 페이징 적용
+        total = len(chunks)
+        paginated_chunks = chunks[offset:offset + limit]
+        
+        return ChunkListResponse(
+            chunks=paginated_chunks,
+            total=total
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing chunks: {str(e)}")
+
+
+@router.get("/chunks/{chunk_id}", response_model=ChunkResponse)
+async def get_chunk(chunk_id: str):
+    """
+    특정 청크 ID로 청크를 조회합니다.
+    
+    Args:
+        chunk_id: 조회할 청크 ID
+    """
+    try:
+        all_docs = ingest_pipeline.get_all_documents()
+        
+        for doc in all_docs:
+            if doc.get("id") == chunk_id:
+                return ChunkResponse(
+                    chunk_id=doc.get("id", ""),
+                    text=doc.get("text", ""),
+                    metadata=doc.get("metadata", {})
+                )
+        
+        raise HTTPException(status_code=404, detail=f"Chunk {chunk_id} not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting chunk: {str(e)}")
+
+
+@router.get("/{document_id}/chunks", response_model=ChunkListResponse)
+async def get_document_chunks(document_id: str):
+    """
+    특정 문서의 모든 청크를 조회합니다.
+    
+    Args:
+        document_id: 조회할 문서 ID
+    """
+    try:
+        all_docs = ingest_pipeline.get_all_documents()
+        
+        chunks = []
+        for doc in all_docs:
+            doc_metadata = doc.get("metadata", {})
+            if doc_metadata.get("document_id") == document_id:
+                chunks.append(ChunkResponse(
+                    chunk_id=doc.get("id", ""),
+                    text=doc.get("text", ""),
+                    metadata=doc_metadata
+                ))
+        
+        if not chunks:
+            raise HTTPException(status_code=404, detail=f"No chunks found for document {document_id}")
+        
+        return ChunkListResponse(
+            chunks=chunks,
+            total=len(chunks)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting document chunks: {str(e)}")
 

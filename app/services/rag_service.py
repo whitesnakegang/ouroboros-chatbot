@@ -2,6 +2,7 @@
 RAG (Retrieval-Augmented Generation) 서비스
 LangChain을 사용한 벡터 검색 및 LLM 응답 생성
 """
+import os
 from typing import List, Dict, Any, Optional
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
@@ -17,7 +18,7 @@ class RAGService:
         self,
         vectorstore: Optional[ChromaVectorStore] = None,
         embedder: Optional[Embedder] = None,
-        llm: Optional[ChatOpenAI] = None
+        llm: Optional[Any] = None
     ):
         """
         RAG 서비스 초기화
@@ -25,21 +26,50 @@ class RAGService:
         Args:
             vectorstore: 벡터 스토어 인스턴스
             embedder: 임베딩 생성기 인스턴스
-            llm: LangChain LLM 인스턴스
+            llm: LangChain LLM 인스턴스 (선택적, 없으면 자동 초기화)
         """
         self.vectorstore = vectorstore
         self.embedder = embedder
         
         # LLM 초기화
         if llm is None:
-            if not settings.openai_api_key:
-                raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY in .env file")
-            self.llm = ChatOpenAI(
-                model=settings.llm_model,
-                temperature=settings.llm_temperature,
-                max_tokens=settings.max_tokens,
-                openai_api_key=settings.openai_api_key
-            )
+            # API 키와 엔드포인트 설정
+            api_key = None
+            base_url = None
+            
+            if settings.use_gms and settings.gms_base_url and settings.gms_api_key:
+                # GMS 사용 시
+                api_key = settings.gms_api_key
+                base_url = settings.gms_base_url
+            elif settings.openai_api_key:
+                # 일반 OpenAI 사용 시
+                api_key = settings.openai_api_key
+                # 환경 변수에서 base_url이 설정되어 있으면 사용
+                base_url = os.environ.get("OPENAI_API_BASE", None)
+            else:
+                raise ValueError(
+                    "API key is required. Set OPENAI_API_KEY or "
+                    "(USE_GMS=true, GMS_API_KEY, GMS_BASE_URL) in .env file"
+                )
+            
+            # ChatOpenAI 초기화 (GMS 지원)
+            # GMS 사용 시 max_completion_tokens 사용, 일반 OpenAI는 max_tokens 사용
+            llm_kwargs = {
+                "model": settings.llm_model,
+                "temperature": settings.llm_temperature,
+                "openai_api_key": api_key,
+            }
+            
+            # base_url이 설정되어 있으면 (GMS 사용 시) 추가
+            if base_url:
+                llm_kwargs["openai_api_base"] = base_url
+                # GMS는 max_completion_tokens 사용
+                llm_kwargs["max_completion_tokens"] = settings.max_tokens
+            else:
+                # 일반 OpenAI는 max_tokens 사용
+                llm_kwargs["max_tokens"] = settings.max_tokens
+            
+            self.llm = ChatOpenAI(**llm_kwargs)
         else:
             self.llm = llm
         
@@ -158,17 +188,16 @@ class RAGService:
         
         # LLM 호출
         try:
-            # LangChain 0.1.0+ 버전에서는 invoke 또는 predict 사용
-            # ChatOpenAI는 HumanMessage를 받거나 문자열을 직접 받을 수 있음
-            try:
-                # 먼저 invoke 시도 (최신 API)
-                from langchain.schema import HumanMessage
-                messages = [HumanMessage(content=prompt)]
-                result = self.llm.invoke(messages)
-                response = result.content if hasattr(result, 'content') else str(result)
-            except (AttributeError, TypeError):
-                # predict 메서드 시도 (구버전 API)
-                response = self.llm.predict(prompt)
+            # ChatOpenAI는 HumanMessage를 받아야 함
+            from langchain.schema import HumanMessage
+            messages = [HumanMessage(content=prompt)]
+            result = self.llm.invoke(messages)
+            
+            # 응답이 객체인 경우 content 속성 추출, 아니면 문자열로 변환
+            if hasattr(result, 'content'):
+                response = result.content
+            else:
+                response = str(result)
         except Exception as e:
             return {
                 "response": f"오류가 발생했습니다: {str(e)}",
