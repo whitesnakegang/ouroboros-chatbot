@@ -63,8 +63,10 @@ class RAGService:
             # base_url이 설정되어 있으면 (GMS 사용 시) 추가
             if base_url:
                 llm_kwargs["openai_api_base"] = base_url
-                # GMS는 max_completion_tokens 사용
-                llm_kwargs["max_completion_tokens"] = settings.max_tokens
+                # GMS는 max_completion_tokens를 model_kwargs로 전달
+                llm_kwargs["model_kwargs"] = {
+                    "max_completion_tokens": settings.max_tokens
+                }
             else:
                 # 일반 OpenAI는 max_tokens 사용
                 llm_kwargs["max_tokens"] = settings.max_tokens
