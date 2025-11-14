@@ -60,8 +60,12 @@ class IngestPipeline:
         
         document = self.loader.load_text(text, metadata)
         
-        # 2. 문서 청킹
-        chunks = self.chunker.chunk_document(document, preserve_metadata=True)
+        # 2. 문서 청킹 (마크다운으로 처리)
+        chunks = self.chunker.chunk_markdown_document(
+            document,
+            preserve_metadata=True,
+            preserve_headers=True
+        )
         
         if not chunks:
             raise ValueError("No chunks created from document")

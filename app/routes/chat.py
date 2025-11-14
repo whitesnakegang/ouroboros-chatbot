@@ -55,7 +55,6 @@ async def chat(request: ChatRequest):
         
         return ChatResponse(
             response=result["response"],
-            conversation_id=request.conversation_id or "default",
             sources=sources if sources else None
         )
     except Exception as e:

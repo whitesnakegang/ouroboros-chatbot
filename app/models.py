@@ -8,13 +8,11 @@ from typing import List, Optional, Dict, Any
 class ChatRequest(BaseModel):
     """채팅 요청 모델"""
     message: str = Field(..., description="사용자 메시지")
-    conversation_id: Optional[str] = Field(None, description="대화 ID")
 
 
 class ChatResponse(BaseModel):
     """채팅 응답 모델"""
     response: str = Field(..., description="챗봇 응답")
-    conversation_id: str = Field(..., description="대화 ID")
     sources: Optional[List[str]] = Field(None, description="참조된 문서 소스")
 
 
@@ -66,3 +64,15 @@ class StatsResponse(BaseModel):
     total_chunks: int = Field(..., description="전체 청크 수")
     collection_name: str = Field(..., description="컬렉션 이름")
 
+
+class ChunkResponse(BaseModel):
+    """청크 응답 모델"""
+    chunk_id: str = Field(..., description="청크 ID")
+    text: str = Field(..., description="청크 텍스트")
+    metadata: Dict[str, Any] = Field(..., description="청크 메타데이터")
+
+
+class ChunkListResponse(BaseModel):
+    """청크 목록 응답 모델"""
+    chunks: List[ChunkResponse] = Field(..., description="청크 목록")
+    total: int = Field(..., description="전체 청크 수")

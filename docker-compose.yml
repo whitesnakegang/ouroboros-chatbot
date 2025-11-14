@@ -11,8 +11,12 @@ services:
       - .:/app
       # 벡터 DB 데이터 영구 저장
       - vector_db_data:/app/vector_db
+      # 문서 디렉토리 마운트 (호스트의 문서를 컨테이너에서 접근 가능하게)
+      # 사용 예시: 호스트의 /home/user/documents를 컨테이너의 /app/documents에 마운트
+      # - /path/to/your/documents:/app/documents
     environment:
       - PYTHONUNBUFFERED=1
+      - ANONYMIZED_TELEMETRY=False
     env_file:
       - .env
     restart: unless-stopped

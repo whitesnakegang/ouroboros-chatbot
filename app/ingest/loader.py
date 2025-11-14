@@ -247,4 +247,116 @@ class DocumentLoader:
                 continue
         
         return documents
+    
+    @staticmethod
+    def load_markdown_file(file_path: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        마크다운 파일에서 문서 로드
+        
+        Args:
+            file_path: 마크다운 파일 경로
+            metadata: 문서 메타데이터
+            
+        Returns:
+            문서 딕셔너리
+        """
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                text = f.read()
+            
+            if metadata is None:
+                metadata = {}
+            
+            metadata["source"] = file_path
+            metadata["filename"] = os.path.basename(file_path)
+            metadata["source_type"] = "markdown"
+            metadata["document_id"] = metadata.get("document_id") or str(uuid.uuid4())
+            
+            return DocumentLoader.load_text(text, metadata)
+        except Exception as e:
+            raise ValueError(f"Error loading markdown file {file_path}: {e}")
+    
+    @staticmethod
+    def load_markdown_from_bytes(
+        file_bytes: bytes,
+        filename: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        바이트 데이터에서 마크다운 파싱
+        
+        Args:
+            file_bytes: 마크다운 파일 바이트
+            filename: 파일명
+            metadata: 문서 메타데이터
+            
+        Returns:
+            문서 딕셔너리
+        """
+        try:
+            text = file_bytes.decode("utf-8")
+            
+            if metadata is None:
+                metadata = {}
+            
+            metadata["filename"] = filename
+            metadata["source"] = f"uploaded:{filename}"
+            metadata["source_type"] = "markdown"
+            
+            return DocumentLoader.load_text(text, metadata)
+        except UnicodeDecodeError:
+            # UTF-8 실패 시 다른 인코딩 시도
+            try:
+                text = file_bytes.decode("latin-1")
+                if metadata is None:
+                    metadata = {}
+                metadata["filename"] = filename
+                metadata["source"] = f"uploaded:{filename}"
+                metadata["source_type"] = "markdown"
+                return DocumentLoader.load_text(text, metadata)
+            except Exception as e:
+                raise ValueError(f"Error decoding markdown file {filename}: {e}")
+        except Exception as e:
+            raise ValueError(f"Error processing markdown file {filename}: {e}")
+    
+    @staticmethod
+    def load_markdown_directory(
+        directory_path: str,
+        pattern: str = "*.md",
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        디렉토리에서 모든 마크다운 파일 로드
+        
+        Args:
+            directory_path: 디렉토리 경로
+            pattern: 파일 패턴 (기본값: *.md)
+            metadata: 기본 메타데이터
+            
+        Returns:
+            문서 딕셔너리 리스트
+        """
+        documents = []
+        path = Path(directory_path)
+        
+        if not path.exists():
+            raise ValueError(f"Directory not found: {directory_path}")
+        
+        md_files = list(path.rglob(pattern))
+        
+        if not md_files:
+            raise ValueError(f"No markdown files found in {directory_path}")
+        
+        for md_file in md_files:
+            file_metadata = metadata.copy() if metadata else {}
+            file_metadata["relative_path"] = str(md_file.relative_to(path))
+            
+            try:
+                doc = DocumentLoader.load_markdown_file(str(md_file), file_metadata)
+                documents.append(doc)
+            except Exception as e:
+                print(f"Warning: Failed to load {md_file}: {e}")
+                continue
+        
+        return documents
 

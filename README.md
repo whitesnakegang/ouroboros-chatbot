@@ -265,7 +265,7 @@ curl http://localhost:8000/documents
 # 5. 채팅 테스트
 curl -X POST "http://localhost:8000/chat" \
   -H "Content-Type: application/json" \
-  -d '{"message": "안녕하세요", "conversation_id": "test-1"}'
+  -d '{"message": "안녕하세요"}'
 ```
 
 ### 방법 5: Postman 또는 Insomnia

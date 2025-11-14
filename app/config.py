@@ -16,9 +16,14 @@ class Settings(BaseSettings):
     
     # LLM 설정
     openai_api_key: Optional[str] = None
-    llm_model: str = "gpt-3.5-turbo"  # OpenAI 모델 이름
-    llm_temperature: float = 0.7  # LLM 온도 설정
+    llm_model: str = "gpt-5-mini"  # OpenAI 모델 이름 (GMS 사용 시: "gpt-5-mini" 등)
+    llm_temperature: float = 1  # LLM 온도 설정
     max_tokens: int = 1000  # 최대 토큰 수
+    
+    # GMS (Gen AI Management System) 설정
+    use_gms: bool = False  # GMS 사용 여부
+    gms_base_url: Optional[str] = None  # GMS API 엔드포인트 (예: "https://gms.ssafy.io/gmsapi/api.openai.com/v1")
+    gms_api_key: Optional[str] = None  # GMS API 키 (GMS_KEY)
     
     # 임베딩 모델 설정
     # 추천 모델 옵션:
