@@ -34,19 +34,18 @@ pipeline {
                         
                         script {
                             echo "--- 1. Preparing Host Directory ---"
-                            // SSH로 호스트에 접속해 프로젝트 폴더가 있는지 확인하고 없으면 생성
-                            sh "ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@localhost 'mkdir -p ${env.PROJECT_DIR}'"
+                            // [수정됨] @localhost -> @host.docker.internal
+                            sh "ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@host.docker.internal 'mkdir -p ${env.PROJECT_DIR}'"
 
                             echo "--- 2. Copying .env file to Host ---"
-                            // 젠킨스 컨테이너의 임시 파일을 'scp'를 이용해 EC2 호스트로 복사
-                            // ${env.PROJECT_DIR}/.env 경로에 저장됩니다.
-                            sh "scp -o StrictHostKeyChecking=no ${env.ENV_FILE_PATH} ${env.EC2_USER}@localhost:${env.PROJECT_DIR}/.env"
+                            // [수정됨] @localhost -> @host.docker.internal
+                            sh "scp -o StrictHostKeyChecking=no ${env.ENV_FILE_PATH} ${env.EC2_USER}@host.docker.internal:${env.PROJECT_DIR}/.env"
                             echo ".env file copied successfully."
 
                             echo "--- 3. Running Git, Build, and Deploy on Host ---"
-                            // SSH로 호스트에 접속하여 모든 배포 명령을 실행 (Heredoc 사용)
+                            // [수정됨] @localhost -> @host.docker.internal
                             sh """
-                                ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@localhost <<EOF
+                                ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@host.docker.internal <<EOF
                                     
                                     # 명령어 실패 시 즉시 중단
                                     set -e 
