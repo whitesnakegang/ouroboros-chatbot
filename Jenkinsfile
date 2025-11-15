@@ -27,60 +27,61 @@ pipeline {
             steps {
                 // 1. 젠킨스에 등록한 SSH 키를 로드합니다. (sshagent 플러그인 필요)
                 sshagent(credentials: [env.SSH_CRED_ID]) {
-                    
-                    // 2. 젠킨스에 등록한 'ENV_FILE'을 로드합니다.
-                    //    'ENV_FILE_PATH'라는 임시 변수에 파일 경로가 저장됩니다.
-                    withCredentials([file(credentialsId: env.ENV_FILE_CRED_ID, variable: 'ENV_FILE_PATH')]) {
+                    script {
                         
-                        script {
-                            echo "--- 1. Preparing Host Directory ---"
-                            // [수정됨] @localhost -> @host.docker.internal
-                            sh "ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@host.docker.internal 'mkdir -p ${env.PROJECT_DIR}'"
+                        echo "--- 1. Cloning/Pulling Repository on Host ---"
+                        // SSH로 호스트에 접속해 폴더를 만들고 Git 작업을 먼저 수행
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@host.docker.internal <<EOF
+                                set -e
+                                
+                                echo '[Host] Preparing project directory...'
+                                mkdir -p ${env.PROJECT_DIR}
+                                cd ${env.PROJECT_DIR}
+                                
+                                # Git Clone 또는 Pull 로직
+                                if [ ! -d ".git" ]; then
+                                    echo '[Host] Cloning repository...'
+                                    git clone ${env.GIT_REPO_URL} .
+                                else
+                                    echo '[Host] Pulling repository...'
+                                    git pull
+                                fi
+                            EOF
+                        """
 
+                        // 2. 젠킨스에 등록한 'ENV_FILE'을 로드하여 호스트에 복사
+                        withCredentials([file(credentialsId: env.ENV_FILE_CRED_ID, variable: 'ENV_FILE_PATH')]) {
                             echo "--- 2. Copying .env file to Host ---"
-                            // [수정됨] @localhost -> @host.docker.internal
                             sh "scp -o StrictHostKeyChecking=no ${env.ENV_FILE_PATH} ${env.EC2_USER}@host.docker.internal:${env.PROJECT_DIR}/.env"
                             echo ".env file copied successfully."
-
-                            echo "--- 3. Running Git, Build, and Deploy on Host ---"
-                            // [수정됨] @localhost -> @host.docker.internal
-                            sh """
-                                ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@host.docker.internal <<EOF
-                                    
-                                    # 명령어 실패 시 즉시 중단
-                                    set -e 
-                                    
-                                    echo '[Host] Connected. Moving to project directory...'
-                                    cd ${env.PROJECT_DIR}
-                                    
-                                    # 1. Git Clone 또는 Pull
-                                    if [ ! -d ".git" ]; then
-                                        echo '[Host] Cloning repository...'
-                                        git clone ${env.GIT_REPO_URL} .
-                                    else
-                                        echo '[Host] Pulling repository...'
-                                        git pull
-                                    fi
-                                    
-                                    echo '[Host] .env file confirmed:'
-                                    ls -l .env
-                                    
-                                    # 2. Docker Compose로 빌드 및 배포
-                                    # (호스트에 docker-compose가 설치되어 있어야 함)
-                                    echo '[Host] Stopping old containers...'
-                                    docker-compose down || true
-                                    
-                                    echo '[Host] Building new images...'
-                                    docker-compose build --no-cache
-                                    
-                                    echo '[Host] Starting new containers...'
-                                    docker-compose up -d
-                                    
-                                    echo '[Host] --- Deployment Complete ---'
-                                    docker-compose ps
-                                EOF
-                            """
                         }
+
+                        echo "--- 3. Running Build and Deploy on Host ---"
+                        // SSH로 호스트에 다시 접속하여 Docker Compose 실행
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@host.docker.internal <<EOF
+                                set -e 
+                                
+                                echo '[Host] Moving to project directory...'
+                                cd ${env.PROJECT_DIR}
+                                
+                                echo '[Host] .env file confirmed:'
+                                ls -l .env
+                                
+                                echo '[Host] Stopping old containers...'
+                                docker-compose down || true
+                                
+                                echo '[Host] Building new images...'
+                                docker-compose build --no-cache
+                                
+                                echo '[Host] Starting new containers...'
+                                docker-compose up -d
+                                
+                                echo '[Host] --- Deployment Complete ---'
+                                docker-compose ps
+                            EOF
+                        """
                     }
                 }
             }
