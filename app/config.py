@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     
     # RAG 설정
     retrieval_top_k: int = 5  # 검색할 문서 수
+    similarity_threshold: float = 0.5  # 유사도 임계값 (거리가 이 값보다 크면 관련성 낮음으로 판단)
     rag_prompt_template: str = """다음 공식 문서를 참고하여 사용자의 질문에 답변해주세요.
 
 공식 문서 내용:
