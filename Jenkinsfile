@@ -1,181 +1,96 @@
 pipeline {
+    // 젠킨스 컨테이너에서 실행
     agent any
 
     environment {
-        DOCKER_IMAGE_NAME = 'rag-chatbot'
-        DOCKER_IMAGE_TAG = "${env.BUILD_NUMBER}"
+        // --- [설정 필요 1] ---
+        // EC2 호스트에 실제 프로젝트가 배포될 경로
+        PROJECT_DIR = "/home/ubuntu/rag-chatbot" 
+        
+        // --- [설정 필요 2] ---
+        // Git 리포지토리 주소
+        GIT_REPO_URL = "https://github.com/whitesnakegang/ouroboros-chatbot.git"
+        
+        // --- [설정 필요 3] ---
+        // EC2 접속 유저 이름 (이전에 'ec2-user'로 가정)
+        EC2_USER = "ubuntu" 
+
+        // --- [Credential ID] ---
+        // 젠킨스에 등록한 SSH 키 ID
+        SSH_CRED_ID = 'ec2-host-ssh-key' 
+        // 젠킨스에 등록한 Secret File ID
+        ENV_FILE_CRED_ID = 'ENV_FILE' 
     }
 
     stages {
-        stage('Git Clone') {
+        stage('Deploy to Host via SSH') {
             steps {
-                script {
-                    // Git 저장소 클론 (브랜치는 Jenkins 설정에서 지정)
-                    checkout scm
-                    echo "Git clone success - Branch: ${env.BRANCH_NAME}"
-                }
-            }
-        }
-        
-       
-
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    echo 'Building Docker image...'
-                    sh """
-                        # 기존 컨테이너 및 이미지 정리 (선택적)
-                        docker-compose down || true
-                        docker rmi ${env.DOCKER_IMAGE_NAME}:${env.DOCKER_IMAGE_TAG} || true
-                        docker rmi ${env.DOCKER_IMAGE_NAME}:latest || true
-        
-                        # Docker 이미지 빌드
-                        docker build -t ${env.DOCKER_IMAGE_NAME}:${env.DOCKER_IMAGE_TAG} .
-                        docker tag ${env.DOCKER_IMAGE_NAME}:${env.DOCKER_IMAGE_TAG} ${env.DOCKER_IMAGE_NAME}:latest
-        
-                        echo "Docker image built: ${env.DOCKER_IMAGE_NAME}:${env.DOCKER_IMAGE_TAG}"
-                    """
-                    echo 'Docker image build success'
-                }
-            }
-        }
-
-        stage('Docker Image Test') {
-            steps {
-                script {
-                    echo 'Testing Docker image...'
-                    sh """
-                        # Docker 이미지가 제대로 빌드되었는지 확인
-                        docker images | grep ${env.DOCKER_IMAGE_NAME}
-        
-                        # 컨테이너 실행 테스트 (헬스체크)
-                        docker run -d --name test-container -p 8001:8000 ${env.DOCKER_IMAGE_NAME}:${env.DOCKER_IMAGE_TAG} || true
-        
-                        # 잠시 대기 후 헬스체크
-                        sleep 10
-                        curl -f http://localhost:8001/health || echo "Health check failed"
-        
-                        # 테스트 컨테이너 정리
-                        docker stop test-container || true
-                        docker rm test-container || true
-                    """
-                    echo 'Docker image test completed'
-                }
-            }
-        }
-
-        stage('Prepare Environment') {
-            steps {
-                script {
-                    echo 'Preparing environment variables...'
-                    sh '''
-                        # .env 파일이 Jenkins 서버에 있는 경우 복사
-                        # 방법 1: Jenkins 서버의 특정 경로에서 .env 파일 복사
-                        if [ -f /var/jenkins_home/.env ]; then
-                            cp /var/jenkins_home/.env .env
-                            echo ".env file copied from Jenkins home directory"
-                        # 방법 2: 환경 변수로부터 .env 파일 생성
-                        elif [ ! -f .env ] && [ -n "$OPENAI_API_KEY" ]; then
-                            echo "Creating .env file from environment variables..."
-                            cat > .env << EOF
-# API Keys
-OPENAI_API_KEY=${OPENAI_API_KEY:-}
-USE_GMS=${USE_GMS:-false}
-GMS_BASE_URL=${GMS_BASE_URL:-}
-GMS_API_KEY=${GMS_API_KEY:-}
-
-# LLM Settings
-LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
-LLM_TEMPERATURE=${LLM_TEMPERATURE:-1}
-MAX_TOKENS=${MAX_TOKENS:-1000}
-
-# Embedding Settings
-EMBEDDING_MODEL=${EMBEDDING_MODEL:-intfloat/multilingual-e5-base}
-EMBEDDING_DEVICE=${EMBEDDING_DEVICE:-cpu}
-
-# Vector DB Settings
-CHROMA_DB_PATH=${CHROMA_DB_PATH:-./vector_db}
-COLLECTION_NAME=${COLLECTION_NAME:-documents}
-
-# Document Processing
-CHUNK_SIZE=${CHUNK_SIZE:-1000}
-CHUNK_OVERLAP=${CHUNK_OVERLAP:-200}
-
-# RAG Settings
-RETRIEVAL_TOP_K=${RETRIEVAL_TOP_K:-5}
-EOF
-                            echo ".env file created from environment variables"
-                        else
-                            echo ".env file already exists or will be used from repository"
-                        fi
+                // 1. 젠킨스에 등록한 SSH 키를 로드합니다. (sshagent 플러그인 필요)
+                sshagent(credentials: [env.SSH_CRED_ID]) {
+                    
+                    // 2. 젠킨스에 등록한 'ENV_FILE'을 로드합니다.
+                    //    'ENV_FILE_PATH'라는 임시 변수에 파일 경로가 저장됩니다.
+                    withCredentials([file(credentialsId: env.ENV_FILE_CRED_ID, variable: 'ENV_FILE_PATH')]) {
                         
-                        # .env 파일 존재 확인
-                        if [ -f .env ]; then
-                            echo ".env file found"
-                            # 민감한 정보는 마스킹하여 출력
-                            grep -v "API_KEY\|SECRET\|PASSWORD" .env || true
-                        else
-                            echo "Warning: .env file not found. Using default values or environment variables."
-                        fi
-                    '''
-                }
-            }
-        }
+                        script {
+                            echo "--- 1. Preparing Host Directory ---"
+                            // SSH로 호스트에 접속해 프로젝트 폴더가 있는지 확인하고 없으면 생성
+                            sh "ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@localhost 'mkdir -p ${env.PROJECT_DIR}'"
 
-        stage('Deploy') {
-            when {
-                // develop 또는 main 브랜치일 때만 배포
-                anyOf {
-                    branch 'develop'
-                    branch 'main'
-                    branch 'master'
-                }
-            }
-            steps {
-                script {
-                    echo 'Deploying application...'
-                    sh '''
-                        # 기존 컨테이너 중지
-                        docker-compose down || true
-        
-                        # 최신 이미지로 업데이트
-                        docker-compose build --no-cache
-        
-                        # 컨테이너 시작 (.env 파일 자동 로드)
-                        docker-compose up -d
-        
-                        # 배포 상태 확인
-                        sleep 5
-                        docker-compose ps
-        
-                        echo "Deployment completed"
-                    '''
-                    echo 'Deploy success'
+                            echo "--- 2. Copying .env file to Host ---"
+                            // 젠킨스 컨테이너의 임시 파일을 'scp'를 이용해 EC2 호스트로 복사
+                            // ${env.PROJECT_DIR}/.env 경로에 저장됩니다.
+                            sh "scp -o StrictHostKeyChecking=no ${env.ENV_FILE_PATH} ${env.EC2_USER}@localhost:${env.PROJECT_DIR}/.env"
+                            echo ".env file copied successfully."
+
+                            echo "--- 3. Running Git, Build, and Deploy on Host ---"
+                            // SSH로 호스트에 접속하여 모든 배포 명령을 실행 (Heredoc 사용)
+                            sh """
+                                ssh -o StrictHostKeyChecking=no ${env.EC2_USER}@localhost <<EOF
+                                    
+                                    # 명령어 실패 시 즉시 중단
+                                    set -e 
+                                    
+                                    echo '[Host] Connected. Moving to project directory...'
+                                    cd ${env.PROJECT_DIR}
+                                    
+                                    # 1. Git Clone 또는 Pull
+                                    if [ ! -d ".git" ]; then
+                                        echo '[Host] Cloning repository...'
+                                        git clone ${env.GIT_REPO_URL} .
+                                    else
+                                        echo '[Host] Pulling repository...'
+                                        git pull
+                                    fi
+                                    
+                                    echo '[Host] .env file confirmed:'
+                                    ls -l .env
+                                    
+                                    # 2. Docker Compose로 빌드 및 배포
+                                    # (호스트에 docker-compose가 설치되어 있어야 함)
+                                    echo '[Host] Stopping old containers...'
+                                    docker-compose down || true
+                                    
+                                    echo '[Host] Building new images...'
+                                    docker-compose build --no-cache
+                                    
+                                    echo '[Host] Starting new containers...'
+                                    docker-compose up -d
+                                    
+                                    echo '[Host] --- Deployment Complete ---'
+                                    docker-compose ps
+                                EOF
+                            """
+                        }
+                    }
                 }
             }
         }
     }
-
+    
     post {
         always {
-            script {
-                echo 'Cleaning up...'
-                sh '''
-                    # 테스트 컨테이너 정리
-                    docker stop test-container || true
-                    docker rm test-container || true
-                    
-                    # 가상환경 정리 (선택적)
-                    rm -rf venv || true
-                '''
-            }
-        }
-        success {
-            echo 'Pipeline succeeded!'
-        }
-        failure {
-            echo 'Pipeline failed!'
+            echo 'Pipeline finished.'
         }
     }
 }
-
