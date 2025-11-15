@@ -37,6 +37,12 @@ pipeline {
                                 
                                 echo '[Host] Preparing project directory...'
                                 mkdir -p ${env.PROJECT_DIR}
+                                
+                                echo '[Host] Ensuring correct directory ownership...'
+                                # [수정됨] ubuntu 유저가 폴더에 쓸 수 있도록 소유권을 변경합니다.
+                                sudo chown -R ${env.EC2_USER}:${env.EC2_USER} ${env.PROJECT_DIR}
+                                
+                                echo '[Host] Moving to project directory...'
                                 cd ${env.PROJECT_DIR}
                                 
                                 # Git Clone 또는 Pull 로직
@@ -50,7 +56,7 @@ pipeline {
                                     git pull
                                 fi
 EOF
-                        """ // [수정됨] 닫는 EOF를 줄 맨 앞으로 이동
+                        """ // 닫는 EOF를 줄 맨 앞으로 이동
 
                         // 2. 젠킨스에 등록한 'ENV_FILE'을 로드하여 호스트에 복사
                         withCredentials([file(credentialsId: env.ENV_FILE_CRED_ID, variable: 'ENV_FILE_PATH')]) {
@@ -83,7 +89,7 @@ EOF
                                 echo '[Host] --- Deployment Complete ---'
                                 docker-compose ps
 EOF
-                        """ // [수정됨] 닫는 EOF를 줄 맨 앞으로 이동
+                        """ // 닫는 EOF를 줄 맨 앞으로 이동
                     }
                 }
             }
