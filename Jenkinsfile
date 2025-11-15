@@ -39,12 +39,14 @@ pipeline {
                                 mkdir -p ${env.PROJECT_DIR}
                                 
                                 echo '[Host] Ensuring correct directory ownership...'
-                                # [수정됨] ubuntu 유저가 폴더에 쓸 수 있도록 소유권을 변경합니다.
-                                # 이것이 'Permission denied' 오류를 해결합니다.
                                 sudo chown -R ${env.EC2_USER}:${env.EC2_USER} ${env.PROJECT_DIR}
                                 
                                 echo '[Host] Moving to project directory...'
                                 cd ${env.PROJECT_DIR}
+                                
+                                echo '[Host] Removing old .env file to prevent scp conflicts...'
+                                # [수정됨] scp가 덮어쓰기 전에 기존의 읽기 전용 파일을 삭제합니다.
+                                rm -f .env
                                 
                                 # Git Clone 또는 Pull 로직
                                 if [ ! -d ".git" ]; then
@@ -62,7 +64,6 @@ EOF
                         // 2. 젠킨스에 등록한 'ENV_FILE'을 로드하여 호스트에 복사
                         withCredentials([file(credentialsId: env.ENV_FILE_CRED_ID, variable: 'ENV_FILE_PATH')]) {
                             echo "--- 2. Copying .env file to Host ---"
-                            // [수정됨] Groovy String 보간 경고를 피하기 위해 싱글 쿼트로 변경
                             sh '''
                                 scp -o StrictHostKeyChecking=no $ENV_FILE_PATH ${EC2_USER}@host.docker.internal:${PROJECT_DIR}/.env
                             '''
