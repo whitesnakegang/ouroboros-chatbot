@@ -42,19 +42,15 @@ pipeline {
                                 # Git Clone 또는 Pull 로직
                                 if [ ! -d ".git" ]; then
                                     echo '[Host] No .git directory found. Cleaning directory for fresh clone...'
-                                    
-                                    # [수정됨] Klon 전에 폴더 안의 모든 파일을 삭제합니다.
-                                    # (숨김 파일 포함, . 와 .. 제외)
                                     rm -rf * .[^.]* || true
-                                    
                                     echo '[Host] Cloning repository...'
                                     git clone ${env.GIT_REPO_URL} .
                                 else
                                     echo '[Host] Pulling repository...'
                                     git pull
                                 fi
-                            EOF
-                        """
+EOF
+                        """ // [수정됨] 닫는 EOF를 줄 맨 앞으로 이동
 
                         // 2. 젠킨스에 등록한 'ENV_FILE'을 로드하여 호스트에 복사
                         withCredentials([file(credentialsId: env.ENV_FILE_CRED_ID, variable: 'ENV_FILE_PATH')]) {
@@ -86,8 +82,8 @@ pipeline {
                                 
                                 echo '[Host] --- Deployment Complete ---'
                                 docker-compose ps
-                            EOF
-                        """
+EOF
+                        """ // [수정됨] 닫는 EOF를 줄 맨 앞으로 이동
                     }
                 }
             }
