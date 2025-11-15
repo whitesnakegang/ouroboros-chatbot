@@ -41,6 +41,12 @@ pipeline {
                                 
                                 # Git Clone 또는 Pull 로직
                                 if [ ! -d ".git" ]; then
+                                    echo '[Host] No .git directory found. Cleaning directory for fresh clone...'
+                                    
+                                    # [수정됨] Klon 전에 폴더 안의 모든 파일을 삭제합니다.
+                                    # (숨김 파일 포함, . 와 .. 제외)
+                                    rm -rf * .[^.]* || true
+                                    
                                     echo '[Host] Cloning repository...'
                                     git clone ${env.GIT_REPO_URL} .
                                 else
