@@ -136,9 +136,9 @@ ouro_chatbot/
 
 다른 모델로 변경하려면 `.env` 파일에서 설정:
 ```bash
-EMBEDDING_MODEL=intfloat/multilingual-e5-large  # 더 높은 품질
-# 또는
-EMBEDDING_MODEL=intfloat/multilingual-e5-small   # 더 빠른 속도
+EMBEDDING_MODEL=intfloat/multilingual-e5-large  
+
+EMBEDDING_MODEL=intfloat/multilingual-e5-small  
 ```
 
 ### React 정적 웹 파일 업로드
