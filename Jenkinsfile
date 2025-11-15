@@ -85,8 +85,13 @@ EOF
                                 echo '[Host] Stopping old containers...'
                                 docker-compose down || true
                                 
+                                echo '[Host] Pruning build cache to prevent snapshot errors...'
+                                # [수정됨] 'snapshot not found' 오류 방지를 위해 빌드 캐시 정리
+                                docker builder prune -f || true
+                                
                                 echo '[Host] Building new images...'
-                                docker-compose build --no-cache
+                                # [수정됨] --no-cache 제거 (위에서 prune을 했고, 속도 향상을 위해)
+                                docker-compose build
                                 
                                 echo '[Host] Starting new containers...'
                                 docker-compose up -d
