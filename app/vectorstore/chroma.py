@@ -164,5 +164,38 @@ class ChromaVectorStore:
             문서 수
         """
         return self.collection.count()
+    
+    def delete_all(self) -> bool:
+        """
+        컬렉션의 모든 문서 삭제
+        
+        Returns:
+            성공 여부
+        """
+        try:
+            # 모든 문서 ID 가져오기
+            all_ids = self.collection.get()["ids"]
+            if all_ids:
+                self.collection.delete(ids=all_ids)
+            return True
+        except Exception as e:
+            print(f"Error deleting all documents: {e}")
+            return False
+    
+    def delete_collection(self) -> bool:
+        """
+        컬렉션 전체 삭제
+        
+        Returns:
+            성공 여부
+        """
+        try:
+            self.client.delete_collection(name=self.collection_name)
+            # 컬렉션 재생성
+            self.collection = self._get_or_create_collection()
+            return True
+        except Exception as e:
+            print(f"Error deleting collection: {e}")
+            return False
 
 

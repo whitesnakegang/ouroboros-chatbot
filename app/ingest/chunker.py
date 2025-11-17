@@ -202,8 +202,18 @@ class DocumentChunker:
             header_stack = [h for h in header_stack if h[1] < level]
             header_stack.append((header_text, level))
             
-            # 섹션 텍스트 추출
+            # 섹션 텍스트 추출 (헤더 라인 제외)
             section_text = text[start_pos:end_pos].strip()
+            # 첫 번째 헤더 라인 제거 (부모 헤더 경로에 이미 포함됨)
+            lines = section_text.split('\n', 1)
+            if len(lines) > 1 and lines[0].strip().startswith('#'):
+                section_text = lines[1].strip()
+            elif len(lines) == 1 and lines[0].strip().startswith('#'):
+                section_text = ""
+            
+            # 빈 섹션은 건너뛰기
+            if not section_text:
+                continue
             
             # 코드 블록 처리
             code_blocks = self._extract_code_blocks(section_text)
@@ -216,9 +226,9 @@ class DocumentChunker:
                     if part_type == "code":
                         # 코드 블록은 하나의 청크로 유지
                         chunk_text = part_text
-                        if preserve_headers and header_stack:
-                            header_path = " > ".join([h[0] for h in header_stack])
-                            chunk_text = f"## {header_path}\n\n{chunk_text}"
+                        if header_stack:
+                            header_path = self._build_header_path(header_stack)
+                            chunk_text = f"{header_path}\n\n{chunk_text}"
                         
                         chunks.append({
                             "text": chunk_text,
@@ -231,9 +241,9 @@ class DocumentChunker:
                         # 일반 텍스트는 크기에 따라 분할
                         if len(part_text) <= self.chunk_size:
                             chunk_text = part_text
-                            if preserve_headers and header_stack:
-                                header_path = " > ".join([h[0] for h in header_stack])
-                                chunk_text = f"## {header_path}\n\n{chunk_text}"
+                            if header_stack:
+                                header_path = self._build_header_path(header_stack)
+                                chunk_text = f"{header_path}\n\n{chunk_text}"
                             
                             chunks.append({
                                 "text": chunk_text,
@@ -247,9 +257,9 @@ class DocumentChunker:
                             sub_chunks = self.chunk_text(part_text)
                             for sub_chunk in sub_chunks:
                                 chunk_text = sub_chunk
-                                if preserve_headers and header_stack:
-                                    header_path = " > ".join([h[0] for h in header_stack])
-                                    chunk_text = f"## {header_path}\n\n{chunk_text}"
+                                if header_stack:
+                                    header_path = self._build_header_path(header_stack)
+                                    chunk_text = f"{header_path}\n\n{chunk_text}"
                                 
                                 chunks.append({
                                     "text": chunk_text,
@@ -262,6 +272,10 @@ class DocumentChunker:
                 # 코드 블록이 없는 경우
                 if len(section_text) <= self.chunk_size:
                     chunk_text = section_text
+                    if header_stack:
+                        header_path = self._build_header_path(header_stack)
+                        chunk_text = f"{header_path}\n\n{chunk_text}"
+                    
                     chunks.append({
                         "text": chunk_text,
                         "header": header_stack[-1][0] if header_stack else None,
@@ -274,9 +288,9 @@ class DocumentChunker:
                     sub_chunks = self.chunk_text(section_text)
                     for sub_chunk in sub_chunks:
                         chunk_text = sub_chunk
-                        if preserve_headers and header_stack:
-                            header_path = " > ".join([h[0] for h in header_stack])
-                            chunk_text = f"## {header_path}\n\n{chunk_text}"
+                        if header_stack:
+                            header_path = self._build_header_path(header_stack)
+                            chunk_text = f"{header_path}\n\n{chunk_text}"
                         
                         chunks.append({
                             "text": chunk_text,
@@ -287,6 +301,26 @@ class DocumentChunker:
                         })
         
         return chunks
+    
+    def _build_header_path(self, header_stack: List[Tuple[str, int]]) -> str:
+        """
+        헤더 스택에서 마크다운 형식의 헤더 경로 생성
+        
+        Args:
+            header_stack: (헤더 텍스트, 레벨) 튜플 리스트
+            
+        Returns:
+            마크다운 형식의 헤더 경로 (예: "# 제목 > ## 부제목 > ### 본문")
+        """
+        if not header_stack:
+            return ""
+        
+        path_parts = []
+        for header_text, level in header_stack:
+            markdown_header = "#" * level + " " + header_text
+            path_parts.append(markdown_header)
+        
+        return " > ".join(path_parts)
     
     def _extract_code_blocks(self, text: str) -> List[Tuple[int, int, str]]:
         """

@@ -153,4 +153,22 @@ class IngestPipeline:
         if chunk_ids:
             return self.vectorstore.delete_documents(chunk_ids)
         return False
+    
+    def delete_all_documents(self) -> bool:
+        """
+        모든 문서 삭제
+        
+        Returns:
+            성공 여부
+        """
+        return self.vectorstore.delete_all()
+    
+    def reset_collection(self) -> bool:
+        """
+        컬렉션 전체 삭제 및 재생성
+        
+        Returns:
+            성공 여부
+        """
+        return self.vectorstore.delete_collection()
 

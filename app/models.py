@@ -8,12 +8,14 @@ from typing import List, Optional, Dict, Any
 class ChatRequest(BaseModel):
     """채팅 요청 모델"""
     message: str = Field(..., description="사용자 메시지")
+    session_id: Optional[str] = Field(None, description="세션 ID (없으면 자동 생성)")
 
 
 class ChatResponse(BaseModel):
     """채팅 응답 모델"""
     response: str = Field(..., description="챗봇 응답")
     sources: Optional[List[str]] = Field(None, description="참조된 문서 소스")
+    session_id: str = Field(..., description="세션 ID")
 
 
 class DocumentRequest(BaseModel):

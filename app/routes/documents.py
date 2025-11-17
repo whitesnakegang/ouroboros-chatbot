@@ -94,6 +94,58 @@ async def delete_document(document_id: str):
         raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
 
 
+@router.delete("", summary="모든 문서 삭제")
+async def delete_all_documents():
+    """
+    벡터 데이터베이스의 모든 문서를 삭제합니다.
+    
+    ⚠️ 주의: 이 작업은 되돌릴 수 없습니다!
+    """
+    try:
+        # 삭제 전 문서 수 확인
+        stats_before = ingest_pipeline.vectorstore.count()
+        
+        success = ingest_pipeline.delete_all_documents()
+        
+        if success:
+            return {
+                "message": f"All documents deleted successfully",
+                "deleted_count": stats_before
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete all documents")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting all documents: {str(e)}")
+
+
+@router.post("/reset", summary="컬렉션 초기화")
+async def reset_collection():
+    """
+    벡터 데이터베이스 컬렉션을 완전히 삭제하고 재생성합니다.
+    
+    ⚠️ 주의: 이 작업은 되돌릴 수 없습니다! 모든 데이터가 삭제됩니다.
+    """
+    try:
+        # 삭제 전 문서 수 확인
+        stats_before = ingest_pipeline.vectorstore.count()
+        
+        success = ingest_pipeline.reset_collection()
+        
+        if success:
+            return {
+                "message": "Collection reset successfully",
+                "deleted_count": stats_before
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to reset collection")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error resetting collection: {str(e)}")
+
+
 @router.get("/stats", response_model=StatsResponse)
 async def get_document_stats():
     """
