@@ -147,16 +147,27 @@ class DocumentChunker:
         if not text.strip():
             return []
         
+        # 먼저 코드 블록 위치 추출 (코드 블록 안의 #은 헤더로 인식하지 않기 위해)
+        code_blocks = self._extract_code_blocks(text)
+        code_block_ranges = [(start, end) for start, end, _ in code_blocks]
+        
         # 헤더 패턴 찾기 (#으로 시작하는 줄)
         header_pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
         
-        # 헤더 위치 찾기
+        # 헤더 위치 찾기 (코드 블록 안의 #은 제외)
         headers = []
         for match in header_pattern.finditer(text):
-            level = len(match.group(1))
-            header_text = match.group(2).strip()
             position = match.start()
-            headers.append((position, level, header_text))
+            # 코드 블록 안에 있는지 확인
+            is_in_code_block = any(
+                start <= position < end 
+                for start, end in code_block_ranges
+            )
+            
+            if not is_in_code_block:
+                level = len(match.group(1))
+                header_text = match.group(2).strip()
+                headers.append((position, level, header_text))
         
         # 헤더가 없으면 일반 텍스트 청킹
         if not headers:
@@ -413,5 +424,6 @@ class DocumentChunker:
             chunk_documents.append(chunk_doc)
         
         return chunk_documents
+
 
 
